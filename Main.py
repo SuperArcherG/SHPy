@@ -9,7 +9,7 @@ from tkinter import ttk
 ips = ""
 names = []
 states = []
-
+predefined = True
 
 # Unicode for light on and off emojis
 on_emoji = "\U0001F311"  # Electric Light Bulb
@@ -75,10 +75,14 @@ def ToggleBtn(ip):
 async def discover_devices():
     global ips
     global names
-    ips = ""
-    disc = kasa.Discover()
-    list = await disc.discover()
-    ips = "\n".join(list).splitlines()
+    global predefined
+    if predefined:
+        ips = open("IPs.txt","r").read().splitlines()
+    else:
+        ips = ""
+        disc = kasa.Discover()
+        list = await disc.discover()
+        ips = "\n".join(list).splitlines()
     for ip in ips:
         device = SmartPlug(ip)
         await device.update()
