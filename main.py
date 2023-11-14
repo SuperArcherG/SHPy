@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 from os import environ, getcwd as cwd
 environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
-import os, sys, tkinter as tk, asyncio, kasa, pygame.mixer, signal
+import os, sys, tkinter as tk, asyncio, kasa, pygame.mixer, signal, tele
 from distutils import dir_util
 from tkinter import PhotoImage, Button, Label, Canvas, Tk, ttk, simpledialog
 from PIL import Image, ImageTk, ImageOps
 from kasa import SmartPlug
 from functools import partial
+from tele import sendMessage
 
-
-def restart_program():
+async def restart_program():
     python = sys.executable
     os.execl(python, python, *sys.argv)
 
-def rename_device(i):
+async def rename_device(i):
     current_string = label_vars[i].get()
     new_string = simpledialog.askstring("Rename String", "Enter a new name:", initialvalue=current_string)
     if new_string:
         label_vars[i].set(new_string)
         #print(label_vars[i].get())
         asyncio.run(rename_devicea(label_vars[i].get(),i))
-        restart_program()
+        await sendMessage(text=f"Renamed device \"{current_string}\" to \"{new_string}\"")
+        await restart_program()
         
 
 async def rename_devicea(name,i):
@@ -31,7 +32,7 @@ async def rename_devicea(name,i):
     
 def cleanup():
     pygame.mixer.quit()
-    sys.exit(1)
+    sys.exit()
 
 def signal_handler(sig, frame):
     #print(f"Received signal: {sig}")
@@ -80,11 +81,11 @@ async def UpdateImages():
         await plug.update()
         await SetState(plug, plug.is_on, i=i)
 
-def ToggleBtn(ip,i):
+async def ToggleBtn(ip,i):
     play(blip_sound_path)
     i = ips.index(ip)
     states[i] = not states[i]
-    asyncio.run(Toggle(ip,i))
+    await Toggle(ip,i)
 
 async def UpdateUsage():
     for ip in ips:
@@ -99,12 +100,15 @@ async def discover_devices():
     global names
     global predefined
     if predefined:
+        await sendMessage(text=f"Loading Predefined IPs")
         ips = open("IPs.txt","r").read().splitlines()
     else:
+        await sendMessage(text=f"Discovering Devices")
         ips = ""
         disc = kasa.Discover()
         list = await disc.discover()
         ips = "\n".join(list).splitlines()
+        await sendMessage(text=f"Devices Found: {ips}")
     for ip in ips:
         device = SmartPlug(ip)
         await device.update()
@@ -114,10 +118,13 @@ async def discover_devices():
         states.append(state)
 
 async def main():
+    await sendMessage(text=f"Starting Program")
     global ips
     await discover_devices()
+    await initiateIconManager()
 
-def initiateIconManager():
+async def initiateIconManager():
+    await sendMessage(text=f"Starting Icon Manager")
     for ip in ips:
         dir = cwd()+"/sip/"+str(ip)
         if os.path.exists(dir):
@@ -145,7 +152,6 @@ commandsForIR = {
 }
 
 asyncio.run(main())
-initiateIconManager()
 
 scale = 1
 window_width = round(480 * scale)
@@ -222,6 +228,7 @@ async def SetState(plug,state,i=0):
     id = plug.device_id
     type = plug.device_type
     emeter = plug.emeter_realtime
+    await sendMessage(text=f"Setting {name}{id} to {state} : Device Type: {type}, Emeter: {emeter}")
     dir = cwd()+"/sip/"+str(ips[i])
     file = open(dir, 'r')
     iconid = int(file.read()[0])
@@ -236,7 +243,7 @@ async def SetState(plug,state,i=0):
 
 canvas.create_image(0, 0, anchor=tk.NW, image=background_image)
 canvas.create_image(round(window_width * 4/7), window_height // 2, anchor=tk.CENTER, image=frame_image)
-
+asyncio.run(sendMessage("Loading UI"))
 elements = [
     [
         Button(canvas, image=unknown_image, width=buttonsize,height=buttonsize, command=partial(ToggleBtn, ip, i),borderwidth=0, highlightthickness=0,bg="#5b6d99"),
@@ -257,8 +264,11 @@ label_vars = [tk.StringVar(value=f"{names[i]}") for i,ip in enumerate(ips)]
 asyncio.run(UpdateImages())
 play(startup_sound_path)
 
+
 button = canvas.create_image(window_width,0,anchor=tk.NE,image=power_image)
 canvas.tag_bind(button, "<Button-1>", quitGame)
 
 # Run the Tkinter event loop
+asyncio.run(sendMessage("Successfully Loaded!"))
+asyncio.run(sendMessage("Running Main Loop"))
 root.mainloop()
