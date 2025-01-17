@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 from os import environ, getcwd as cwd
 environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
-import os, sys, tkinter as tk, asyncio, kasa, pygame.mixer, signal, tele
+import os, sys, tkinter as tk, asyncio, kasa, pygame.mixer, signal
 from distutils import dir_util
 from tkinter import PhotoImage, Button, Label, Canvas, Tk, ttk, simpledialog
 from PIL import Image, ImageTk, ImageOps
 from kasa import SmartPlug
 from functools import partial
-from tele import sendMessage
+
+async def sendMessage(text):
+    print(text)
 
 async def restart_program():
     python = sys.executable
@@ -28,40 +30,52 @@ async def rename_devicea(name,i):
     device = SmartPlug(ips[i])
     await device.update()
     await device.set_alias(name)
-    
+   
+def run_async_task(coroutine):
+    """Run the given coroutine in the asyncio event loop."""
+    asyncio.run_coroutine_threadsafe(coroutine, asyncio.get_event_loop()) 
     
 def cleanup():
     pygame.mixer.quit()
     sys.exit()
 
-def signal_handler(sig, frame):
-    #print(f"Received signal: {sig}")
-    cleanup()
+# def signal_handler(sig, frame):
+#     #print(f"Received signal: {sig}")
+#     cleanup()
 
-signal.signal(signal.SIGINT, signal_handler)
+# signal.signal(signal.SIGINT, signal_handler)
 
-def ToggleID(id):
-    return
+# def ToggleID(id):
+#     return
 
 def quitGame(event):
     cleanup()
 
-def set_brightness(brightness):
-    backlight_path = '/sys/class/backlight/intel_backlight/'
-    brightness_file_path = os.path.join(backlight_path, 'brightness')
-    if not os.path.exists(brightness_file_path):
-        print("Brightness control file not found.")
-        return
-    try:
-        with open(brightness_file_path, 'w') as brightness_file:
-            brightness_file.write(str(brightness))
-        print(f'Screen brightness set to {brightness}')
-    except Exception as e:
-        print(f'Error setting brightness: {e}')
+# def set_brightness(brightness):
+#     brightness = '/sys/class/backlight/intel_backlight/brightness'
+#     max_brightness = '/sys/class/backlight/intel_backlight/max_brightness'
+
+#     if not os.path.exists(brightness) or not os.path.exists(max_brightness):
+#         print("Brightness control file(s) not found.")
+#         return
+#     try:
+#         with open(max_brightness, 'w') as max_brightness_file:
+#             max_brightness_file.read
+
+#         with open(brightness, 'w') as brightness_file:
+#             brightness_file.write(str(brightness))
+#         print(f'Screen brightness set to {brightness}')
+#     except Exception as e:
+#         print(f'Error setting brightness: {e}')
+
+# set_brightness(19200)
+# sys.exit()
 
 ips = ""
 names = []
+useage = []
 states = []
+useage_display_state = 0
 predefined = True
 
 async def Toggle(ip,i):
@@ -76,10 +90,13 @@ async def Toggle(ip,i):
 
 async def UpdateImages():
     global ips
+    print(ips)
     for i,ip in enumerate(ips):
         plug = SmartPlug(ip)
         await plug.update()
-        await SetState(plug, plug.is_on, i=i)
+        print(i)
+        await SetState(plug, plug.is_on, i)
+  
 
 async def ToggleBtn(ip,i):
     play(blip_sound_path)
@@ -87,17 +104,29 @@ async def ToggleBtn(ip,i):
     states[i] = not states[i]
     await Toggle(ip,i)
 
+def syncUpdateUsage(event):
+    syncUpdateUseage2()
+    
+def syncUpdateUseage2():
+    print("Updating Useage")
+    asyncio.run(UpdateUsage())
+ 
 async def UpdateUsage():
     for ip in ips:
         i = ips.index(ip)
         plug = SmartPlug(ip)
         await plug.update()
-        state = plug.emeter_realtime
-        #elements[i][2].config(text=f"{str(state).split(' ')[1].split('=')[1]}W {str(state).split(' ')[3].split('=')[1]}A {str(state).split(' ')[4].split('=')[1].split('>')[0]}Kwh",bg="#000000",fg="#FFFFFF")
+        energy_module = plug.modules["Energy"]  # Access the Energy module
+        state = await energy_module.get_status()    # Use the appropriate method to fetch real-time data
+        print(f"Updating Useage {i} {ip}")
+        useage[i] = [f"{str(state).split(' ')[1].split('=')[1]}W",f"{str(state).split(' ')[3].split('=')[1]}A",f"{str(state).split(' ')[4].split('=')[1].split('>')[0]}Kwh"]
+        elements[i][2].config(text=useage[i][useage_display_state],bg="#000000",fg="#FFFFFF")
+    root.update()
 
 async def discover_devices():
     global ips
     global names
+    global useage
     global predefined
     if predefined:
         await sendMessage(text=f"Loading Predefined IPs")
@@ -116,6 +145,7 @@ async def discover_devices():
         state = device.is_on
         names.append(name)
         states.append(state)
+        useage.append(["N/A","N/A","N/A"])
 
 async def main():
     await sendMessage(text=f"Starting Program")
@@ -135,23 +165,28 @@ async def initiateIconManager():
             file.write("0")
             file.close()
             print("Created",ip)
+
 def play(file):
     pygame.mixer.music.load(file)
     pygame.mixer.music.play()
-commandsForIR = {
-    "FF6897" : ToggleID(0), #0
-    "FF30CF" : ToggleID(1), #1
-    "FF18E7" : ToggleID(2), #2
-    "FF7A85" : ToggleID(3), #3
-    "FF10EF" : ToggleID(4), #4
-    "FF38C7" : ToggleID(5), #5
-    "FF5AA5" : ToggleID(6), #6
-    "FF42BD" : ToggleID(7), #7
-    "FF4AB5" : ToggleID(8), #8
-    "FF52AD" : ToggleID(9)  #9
-}
+
+# commandsForIR = {
+#     "FF6897" : ToggleID(0), #0
+#     "FF30CF" : ToggleID(1), #1
+#     "FF18E7" : ToggleID(2), #2
+#     "FF7A85" : ToggleID(3), #3
+#     "FF10EF" : ToggleID(4), #4
+#     "FF38C7" : ToggleID(5), #5
+#     "FF5AA5" : ToggleID(6), #6
+#     "FF42BD" : ToggleID(7), #7
+#     "FF4AB5" : ToggleID(8), #8
+#     "FF52AD" : ToggleID(9)  #9
+# }
 
 asyncio.run(main())
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
 
 scale = 1
 window_width = round(480 * scale)
@@ -169,7 +204,7 @@ canvas.pack()
 root.geometry(f"{window_width}x{window_height}")
 
 background_image_path = cwd() + "/Assets/BG.png"
-button_image_path = cwd() + "/Assets/Blank.png"
+button_image_path = cwd() + "/Assets/b.png"
 power_image_path = cwd() + "/Assets/pow.png"
 frame_image_path = cwd() + "/Assets/SmallFrame.png"
 plon_image_path = cwd() + "/Assets/0on.png"
@@ -180,6 +215,7 @@ fon_image_path = cwd() + "/Assets/2on.png"
 foff_image_path = cwd() + "/Assets/2off.png"
 unknown_image_path = cwd() + "/Assets/q.png"
 edit_image_path = cwd() + "/Assets/edit.png"
+question_image_path = cwd() + "/Assets/q.png"
 blip_sound_path = cwd() + "/Assets/blip.wav"
 startup_sound_path = cwd() + "/Assets/startup.mp3"
 
@@ -202,7 +238,7 @@ power_image = ImageTk.PhotoImage(Image.open(power_image_path).resize((powsize,po
 frame_image = ImageTk.PhotoImage(Image.open(frame_image_path).resize(framesize))
 background_image = ImageTk.PhotoImage(Image.open(background_image_path).resize((xsize, ysize)))
 edit_image = ImageTk.PhotoImage(Image.open(edit_image_path).resize((iconsize, iconsize)))
-
+question_image = ImageTk.PhotoImage(Image.open(question_image_path).resize((iconsize,iconsize)))
 
 
 iconsbyid = {
@@ -219,9 +255,7 @@ iconsbyid = {
         "off" : foff_image
     },
 }
-
-
-async def SetState(plug,state,i=0):
+async def SetState(plug,state,i = 0):
     global ips
     await plug.update()
     name = plug.alias
@@ -241,15 +275,25 @@ async def SetState(plug,state,i=0):
         elements[i][0].config(image=imageSet["off"])
         await plug.turn_off()
 
+def create_toggle_command(ip, i):
+    def toggle():
+        loop = asyncio.get_event_loop()
+          # Schedule the coroutine
+    return toggle
+
+def ToggleBtnAsyncFix(ip,i):
+    asyncio.run(ToggleBtn(ip,i))
+
 canvas.create_image(0, 0, anchor=tk.NW, image=background_image)
 canvas.create_image(round(window_width * 4/7), window_height // 2, anchor=tk.CENTER, image=frame_image)
-asyncio.run(sendMessage("Loading UI"))
+loop.run_until_complete(sendMessage("Loading UI"))
 elements = [
     [
-        Button(canvas, image=unknown_image, width=buttonsize,height=buttonsize, command=partial(ToggleBtn, ip, i),borderwidth=0, highlightthickness=0,bg="#5b6d99"),
+        Button(canvas, image = unknown_image, width=buttonsize,height=buttonsize, command=partial(ToggleBtnAsyncFix,ip, i),borderwidth=0, highlightthickness=0,bg="#5b6d99"), # type: ignore
         Label(text=f"{names[i]}",bg="#15555A",font=("Source Code Pro", round(25*scale),"bold"),fg="#00ffff"),
-        Button(canvas, image = edit_image, command=partial(rename_device,i),bg="#00ffff",borderwidth=0, highlightthickness=0)
-    ] 
+        Label(text=f"{useage[i][useage_display_state]}",bg="#15555A",font=("Source Code Pro", round(25*scale),"bold"),fg="#00ffff"),
+        # Button(canvas, image = edit_image, command=partial(rename_device,i),bg="#00ffff",borderwidth=0, highlightthickness=0) # type: ignore
+    ]
     for i,ip in enumerate(ips)
 ]
 for i,ip in enumerate(ips):
@@ -261,14 +305,16 @@ for i,ip in enumerate(ips):
     elements[i][2].place(x=framePosOffset[0]+buttonsize/2+buttonsize+elements[i][1].winfo_width()+iconsize/2,y=framePosOffset[1]+iconsize/2+20*scale+(buttonsize+15*scale)*i)
 label_vars = [tk.StringVar(value=f"{names[i]}") for i,ip in enumerate(ips)]
 
-asyncio.run(UpdateImages())
+loop.run_until_complete(UpdateImages())
 play(startup_sound_path)
 
 
 button = canvas.create_image(window_width,0,anchor=tk.NE,image=power_image)
 canvas.tag_bind(button, "<Button-1>", quitGame)
 
-# Run the Tkinter event loop
-asyncio.run(sendMessage("Successfully Loaded!"))
-asyncio.run(sendMessage("Running Main Loop"))
+button2 = canvas.create_image(0,0,anchor=tk.NW,image=question_image)
+canvas.tag_bind(button2, "<Button-2>", syncUpdateUsage)
+
+loop.run_until_complete(sendMessage("Successfully Loaded!"))
+loop.run_until_complete(sendMessage("Running Main Loop"))
 root.mainloop()
