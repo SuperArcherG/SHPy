@@ -8,6 +8,8 @@ from PIL import Image, ImageTk, ImageOps
 from kasa import SmartPlug
 from functools import partial
 
+SOUND = False
+
 async def sendMessage(text):
     print(text)
 
@@ -86,7 +88,7 @@ async def Toggle(ip,i):
         await SetState(plug, False,i=i)
     else:
         await SetState(plug, True, i=i)
-    await UpdateUsage()
+    await UpdateUseageSingle(i)
 
 async def UpdateImages():
     global ips
@@ -114,14 +116,17 @@ def syncUpdateUseage2():
 async def UpdateUsage():
     for ip in ips:
         i = ips.index(ip)
-        plug = SmartPlug(ip)
-        await plug.update()
-        energy_module = plug.modules["Energy"]  # Access the Energy module
-        state = await energy_module.get_status()    # Use the appropriate method to fetch real-time data
-        print(f"Updating Useage {i} {ip}")
-        useage[i] = [f"{str(state).split(' ')[1].split('=')[1]}W",f"{str(state).split(' ')[3].split('=')[1]}A",f"{str(state).split(' ')[4].split('=')[1].split('>')[0]}Kwh"]
+        useage[i] = UpdateUseageSingle(i)
         elements[i][2].config(text=useage[i][useage_display_state],bg="#000000",fg="#FFFFFF")
     root.update()
+
+async def UpdateUseageSingle(i):
+    plug = SmartPlug(ip)
+    await plug.update()
+    energy_module = plug.modules["Energy"]  # Access the Energy module
+    state = await energy_module.get_status()    # Use the appropriate method to fetch real-time data
+    print(f"Updating Useage {i} {ip}")
+    return [f"{str(state).split(' ')[1].split('=')[1]}W",f"{str(state).split(' ')[3].split('=')[1]}A",f"{str(state).split(' ')[4].split('=')[1].split('>')[0]}Kwh"]
 
 async def discover_devices():
     global ips
@@ -130,7 +135,7 @@ async def discover_devices():
     global predefined
     if predefined:
         await sendMessage(text=f"Loading Predefined IPs")
-        ips = open("IPs.txt","r").read().splitlines()
+        ips = open("KasaIPs.txt","r").read().splitlines()
     else:
         await sendMessage(text=f"Discovering Devices")
         ips = ""
@@ -167,8 +172,9 @@ async def initiateIconManager():
             print("Created",ip)
 
 def play(file):
-    pygame.mixer.music.load(file)
-    pygame.mixer.music.play()
+    if SOUND:
+        pygame.mixer.music.load(file)
+        pygame.mixer.music.play()
 
 # commandsForIR = {
 #     "FF6897" : ToggleID(0), #0
